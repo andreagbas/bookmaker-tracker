@@ -206,7 +206,12 @@
   footer.foot{text-align:center;color:var(--ink-faint);font-size:11px;font-family:var(--mono);margin-top:24px}
   .empty-state{text-align:center;padding:50px 20px;color:var(--ink-dim)}
   .empty-state b{color:var(--ink)}
+  .drivebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+  .gbtn{white-space:nowrap}
+  .drivestatus{font-family:var(--mono);font-size:12px;color:var(--ink-dim)}
 </style>
+<script src="https://apis.google.com/js/api.js" async defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 <div class="wrap">
@@ -226,6 +231,12 @@
       <button id="yNext">›</button>
     </div>
   </header>
+
+  <div class="drivebar">
+    <button id="gSignIn" class="btn ghost gbtn">Accedi con Google Drive</button>
+    <button id="gSignOut" class="btn ghost gbtn" style="display:none">Esci da Drive</button>
+    <span id="driveStatus" class="drivestatus">Dati salvati solo su questo dispositivo</span>
+  </div>
 
   <div class="toolbar">
     <div class="months" id="months"></div>
@@ -436,6 +447,8 @@ function save(){
       try{Promise.resolve(window.storage.set('tracker',JSON.stringify(app))).catch(()=>{});}catch(e){}
     },400);
   }
+  // sincronizzazione su Google Drive (se connesso), con debounce
+  if(typeof scheduleDriveSave==='function')scheduleDriveSave();
 }
 
 /* ---- backup: esporta / importa ---- */
@@ -471,6 +484,161 @@ function importBackup(file){
   reader.onerror=()=>alert('Impossibile leggere il file.');
   reader.readAsText(file);
 }
+
+/* ================== GOOGLE DRIVE SYNC ==================
+   Login con Google Identity Services + salvataggio del file
+   'profiling-tracker-data.json' su Drive (scope drive.file:
+   l'app vede solo i file che ha creato). Tutti i dispositivi
+   che entrano con lo STESSO account vedono lo stesso file. */
+const GOOGLE_CLIENT_ID='822599334929-276jlhp5h2t3pjun7i7f4kbol9vd0jkq.apps.googleusercontent.com';
+const DRIVE_FILENAME='profiling-tracker-data.json';
+const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+let gToken=null;          // access token corrente
+let gTokenClient=null;    // token client GIS
+let driveFileId=null;     // id del file dati su Drive
+let driveSaveTimer=null;
+let driveReady=false;     // libreria gapi pronta
+let driveBusy=false;
+
+function driveLog(msg){const el=document.getElementById('driveStatus');if(el)el.textContent=msg;}
+
+// caricamento librerie Google (chiamato all'avvio)
+function initGoogle(){
+  // gapi (client REST per Drive)
+  if(window.gapi){
+    gapi.load('client',async()=>{
+      try{
+        await gapi.client.init({discoveryDocs:['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']});
+        driveReady=true;
+      }catch(e){driveReady=false;}
+    });
+  }
+  // GIS (token client per il login)
+  if(window.google&&google.accounts&&google.accounts.oauth2){
+    gTokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:GOOGLE_CLIENT_ID,
+      scope:DRIVE_SCOPE,
+      callback:(resp)=>{
+        if(resp&&resp.access_token){
+          gToken=resp.access_token;
+          gapi.client.setToken({access_token:gToken});
+          onSignedIn();
+        }else{
+          driveLog('Accesso non riuscito.');
+        }
+      }
+    });
+  }
+  updateDriveUI(false);
+}
+
+function driveSignIn(){
+  if(!gTokenClient){alert('Google non è ancora pronto, riprova tra un secondo.');return;}
+  // prompt di consenso al primo accesso, poi silenzioso
+  gTokenClient.requestAccessToken({prompt: gToken?'':'consent'});
+}
+function driveSignOut(){
+  if(gToken&&window.google&&google.accounts&&google.accounts.oauth2){
+    try{google.accounts.oauth2.revoke(gToken,()=>{});}catch(e){}
+  }
+  gToken=null;driveFileId=null;
+  try{gapi.client.setToken(null);}catch(e){}
+  updateDriveUI(false);
+  driveLog('Disconnesso da Google Drive.');
+}
+
+async function onSignedIn(){
+  updateDriveUI(true);
+  driveLog('Connesso. Sincronizzazione…');
+  try{
+    await driveFindOrCreateFile();
+    // Al primo accesso: se su Drive ci sono dati, li carico e sovrascrivo il locale.
+    const remote=await driveDownload();
+    if(remote&&remote.sheets&&Array.isArray(remote.sheets)){
+      // confronto grezzo: se il remoto ha contenuto, chiedo se usarlo
+      const remoteHasData=remote.sheets.some(s=>s.data&&Object.keys(s.data).length);
+      const localHasData=app.sheets.some(s=>s.data&&Object.keys(s.data).length);
+      let useRemote=true;
+      if(localHasData&&remoteHasData){
+        useRemote=confirm('Su Google Drive esistono già dati salvati.\n\nOK = carico i dati da Drive (sovrascrivo quelli locali)\nAnnulla = mantengo i dati locali e li carico su Drive');
+      }else if(localHasData&&!remoteHasData){
+        useRemote=false;
+      }
+      if(useRemote){
+        app={year:new Date().getFullYear(),current:0,warnDays:7,alarmDays:14,minReq:{},sheets:[newSheet('Io')]};
+        adopt(remote);persistLocal();renderAll();
+        driveLog('Dati caricati da Drive.');
+      }else{
+        await driveUpload();
+        driveLog('Dati locali caricati su Drive.');
+      }
+    }else{
+      // file vuoto/nuovo: ci scrivo i dati locali
+      await driveUpload();
+      driveLog('Dati salvati su Drive.');
+    }
+  }catch(e){
+    driveLog('Errore Drive: '+(e&&e.message?e.message:'sconosciuto'));
+  }
+}
+
+// cerca il file dati; se non esiste lo crea vuoto
+async function driveFindOrCreateFile(){
+  const q=encodeURIComponent(`name='${DRIVE_FILENAME}' and trashed=false`);
+  const res=await gapi.client.drive.files.list({q:`name='${DRIVE_FILENAME}' and trashed=false`,spaces:'drive',fields:'files(id,name)'});
+  const files=(res.result&&res.result.files)||[];
+  if(files.length){driveFileId=files[0].id;return driveFileId;}
+  // crea file vuoto
+  const meta={name:DRIVE_FILENAME,mimeType:'application/json'};
+  const createRes=await gapi.client.drive.files.create({resource:meta,fields:'id'});
+  driveFileId=createRes.result.id;
+  return driveFileId;
+}
+
+async function driveDownload(){
+  if(!driveFileId)return null;
+  try{
+    const res=await gapi.client.drive.files.get({fileId:driveFileId,alt:'media'});
+    const body=res.body||'';
+    if(!body.trim())return null;
+    const obj=JSON.parse(body);
+    return obj.app?obj.app:obj;
+  }catch(e){return null;}
+}
+
+async function driveUpload(){
+  if(!gToken)return;
+  if(!driveFileId)await driveFindOrCreateFile();
+  const payload={_type:'profiling-tracker-data',_v:1,savedAt:new Date().toISOString(),app:app};
+  const body=JSON.stringify(payload);
+  // update contenuto via endpoint upload
+  const res=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,{
+    method:'PATCH',
+    headers:{'Authorization':'Bearer '+gToken,'Content-Type':'application/json'},
+    body:body
+  });
+  if(!res.ok)throw new Error('upload '+res.status);
+}
+
+function scheduleDriveSave(){
+  if(!gToken||!driveFileId)return; // non connesso: niente sync
+  clearTimeout(driveSaveTimer);
+  driveSaveTimer=setTimeout(async()=>{
+    if(driveBusy)return;
+    driveBusy=true;
+    try{await driveUpload();driveLog('Salvato su Drive · '+new Date().toLocaleTimeString('it-IT'));}
+    catch(e){driveLog('Errore salvataggio Drive.');}
+    driveBusy=false;
+  },800);
+}
+
+function updateDriveUI(connected){
+  const bIn=document.getElementById('gSignIn'), bOut=document.getElementById('gSignOut');
+  if(bIn)bIn.style.display=connected?'none':'';
+  if(bOut)bOut.style.display=connected?'':'none';
+}
+/* ================ FINE GOOGLE DRIVE SYNC ================ */
+
 
 /* ---- helpers ---- */
 const keyOf=(y,m,d,bm)=>`${y}-${m}-${d}::${bm}`;
@@ -1018,6 +1186,16 @@ document.getElementById('alarmInput').addEventListener('change',e=>{
   app.alarmDays=v;e.target.value=v;save();renderAll();renderBmList();
 });
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.getElementById('overlay').classList.remove('on');document.getElementById('setOverlay').classList.remove('on');}});
+
+// --- pulsanti Google Drive ---
+document.getElementById('gSignIn').onclick=driveSignIn;
+document.getElementById('gSignOut').onclick=driveSignOut;
+// attendo che le librerie Google (caricate async) siano disponibili, poi inizializzo
+(function waitGoogle(tries){
+  if(window.gapi&&window.google&&google.accounts&&google.accounts.oauth2){initGoogle();return;}
+  if(tries<=0){driveLog('Google non disponibile (offline?). Il tracker funziona in locale.');return;}
+  setTimeout(()=>waitGoogle(tries-1),300);
+})(40);
 
 /* init */
 (async()=>{await load();bindScrollSync();renderAll();})();
