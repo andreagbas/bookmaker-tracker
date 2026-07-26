@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bookmaker Profiling Tracker</title>
+<style>
+  :root{
+    --bg:#0a1410;
+    --panel:#0f1c17;
+    --panel2:#122822;
+    --line:#1e3a30;
+    --line-soft:#16302791;
+    --ink:#dfeee6;
+    --ink-dim:#7fa393;
+    --ink-faint:#517061;
+    --green:#3ddc84;
+    --green-deep:#1f7a4d;
+    --amber:#f2b840;
+    --today:#38d6ff;
+    --magenta:#ff3fb4;
+    --red:#ff5d5d;
+    --red-deep:#3a1414;
+    --mono:'DM Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:'Space Grotesk',system-ui,-apple-system,sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:14px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding:20px;
+    background-image:radial-gradient(circle at 20% -10%,#12261d 0%,transparent 55%);
+  }
+  .wrap{max-width:1400px;margin:0 auto}
+
+  /* Header */
+  header{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:22px;border-bottom:1px solid var(--line);padding-bottom:18px}
+  .brand h1{font-size:22px;font-weight:700;letter-spacing:-0.5px;display:flex;align-items:center;gap:10px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}
+  .brand p{color:var(--ink-dim);font-size:12px;margin-top:4px;font-family:var(--mono)}
+  .sheetctrl{display:flex;align-items:center;gap:6px;margin-top:10px}
+  .sheetctrl button{background:var(--panel2);border:1px solid var(--line);color:var(--ink);width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:15px;font-family:var(--mono);transition:.15s;display:flex;align-items:center;justify-content:center}
+  .sheetctrl button:hover{border-color:var(--green);color:var(--green)}
+  .sheetctrl .sname{font-family:var(--sans);font-weight:600;font-size:15px;padding:0 10px;min-width:90px;text-align:center;color:var(--green);letter-spacing:.2px}
+  .sheetctrl .gear{margin-left:4px}
+  .sheetrow{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--line-soft)}
+  .sheetrow:last-child{border-bottom:none}
+  .sheetrow .nm{flex:1;font-weight:600;font-size:14px;cursor:pointer}
+  .sheetrow .nm:hover{color:var(--green)}
+  .sheetrow.active .nm{color:var(--green)}
+  .sheetrow.active::before{content:'●';color:var(--green);font-size:9px}
+  .sheetrow .act{background:none;border:1px solid var(--line);color:var(--ink-dim);border-radius:6px;padding:4px 9px;font-size:11px;font-family:var(--mono);cursor:pointer;transition:.15s}
+  .sheetrow .act:hover{border-color:var(--green);color:var(--green)}
+  .sheetrow .act.del:hover{border-color:var(--red);color:var(--red)}
+  .bmitem{border-bottom:1px solid var(--line-soft);padding-bottom:6px;margin-bottom:2px}
+  .bmitem:last-child{border-bottom:none}
+  .minreq{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 4px 4px}
+  .minreq .mrl{font-size:10px;color:var(--ink-faint);font-family:var(--mono);text-transform:uppercase;letter-spacing:.4px}
+  .minreq label{font-size:11px;color:var(--ink-dim);display:flex;align-items:center;gap:5px;font-family:var(--mono)}
+  .minreq input.mrin{width:66px;padding:5px 7px;font-size:12px}
+  .minreq .mrcat{display:flex;align-items:center;gap:5px}
+  .minreq .mrcat input[type=checkbox]{width:15px;height:15px;accent-color:var(--green);cursor:pointer}
+  .minreq .mrcat.off{opacity:.5}
+  .minreq .mrcat.off input.mrin{background:var(--panel2)}
+  .minreq select.mrparts{padding:5px 7px;font-size:12px;width:auto}
+  .proflegend{display:flex;gap:12px;align-items:center;margin-left:auto}
+  .proflegend .pl{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-dim);font-family:var(--mono)}
+  .proflegend .sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+  .proflegend .sw.green{background:var(--green)}
+  .proflegend .sw.orange{background:var(--amber)}
+  .proflegend .sw.red{background:var(--red)}
+  .yearctrl{display:flex;align-items:center;gap:6px}
+  .yearctrl button{background:var(--panel2);border:1px solid var(--line);color:var(--ink);width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:16px;font-family:var(--mono);transition:.15s}
+  .yearctrl button:hover{border-color:var(--green);color:var(--green)}
+  .yearctrl .yr{font-family:var(--mono);font-size:20px;font-weight:500;min-width:64px;text-align:center;letter-spacing:1px}
+
+  /* Toolbar */
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  .months{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+  .mtab{background:transparent;border:1px solid var(--line-soft);color:var(--ink-dim);padding:6px 11px;border-radius:7px;cursor:pointer;font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.5px;transition:.15s}
+  .mtab:hover{color:var(--ink)}
+  .mtab.on{background:var(--green-deep);border-color:var(--green);color:#eafff4}
+  .mtab.current{border-color:var(--today);color:var(--today)}
+  .mtab.current.on{background:var(--today);border-color:var(--today);color:#04222b}
+  .btn{background:var(--green);color:#04160d;border:none;padding:9px 15px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;transition:.15s;white-space:nowrap}
+  .btn:hover{filter:brightness(1.12)}
+  .btn.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+  .btn.ghost:hover{border-color:var(--green)}
+
+  /* Alerts bar */
+  .alerts{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+  .alert{display:flex;flex-direction:column;gap:6px;padding:11px 14px;border-radius:9px;font-size:13px;border:1px solid}
+  .alert.warn{background:#2a220a;border-color:#5c4a12;color:var(--amber)}
+  .alert.danger{background:var(--red-deep);border-color:#5c1e1e;color:var(--red)}
+  .alert b{font-family:var(--mono);font-weight:500}
+  .alertmain{display:flex;align-items:center;gap:12px}
+  .alert .pill{margin-left:auto;font-family:var(--mono);font-size:12px;opacity:.85}
+  .alertsub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-left:28px;font-family:var(--mono);font-size:12px}
+  .alertsub .miss{color:var(--ink);opacity:.92}
+  .alertsub .miss b{color:inherit}
+  .alertsub .ok{color:var(--green)}
+  .alertsub .deadline{color:var(--amber);opacity:.95}
+  .alertsub .sep{opacity:.4}
+
+  /* Grid table */
+  .scrollbar-top{overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:6px;border-radius:8px;background:var(--panel)}
+  .scrollbar-top #scrollTopInner{height:1px}
+  .scrollbar-top::-webkit-scrollbar{height:11px}
+  .scrollbar-top::-webkit-scrollbar-track{background:var(--panel);border-radius:8px}
+  .scrollbar-top::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;border:2px solid var(--panel)}
+  .scrollbar-top::-webkit-scrollbar-thumb:hover{background:var(--green-deep)}
+  .scrollbar-top{scrollbar-width:thin;scrollbar-color:var(--line) var(--panel)}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+  table{border-collapse:collapse;width:100%;min-width:640px}
+  th,td{border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);text-align:center;font-size:13px}
+  thead th{background:var(--panel2);position:sticky;top:0;padding:10px 8px;font-weight:600;font-size:12px;letter-spacing:.3px;z-index:2}
+  thead th.bm{min-width:110px}
+  thead th .bmname{display:flex;align-items:center;justify-content:center;gap:6px}
+  thead th .bmoff{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--amber);letter-spacing:.3px;margin-top:3px;opacity:1}
+  thead th .rm{color:var(--ink-faint);cursor:pointer;font-family:var(--mono);font-size:14px;line-height:1}
+  thead th .rm:hover{color:var(--red)}
+  .addbm{cursor:pointer;color:var(--green);font-family:var(--mono);font-size:12px;white-space:nowrap}
+  td.datecell{font-family:var(--mono);font-size:12px;color:var(--ink-dim);text-align:left;padding:0 10px;white-space:nowrap;position:sticky;left:0;background:var(--panel);z-index:1;min-width:96px}
+  td.datecell .dow{color:var(--ink-faint);margin-left:6px}
+  tr.weekend td.datecell{color:var(--amber)}
+  tr.today td{background:#0a2630}
+  tr.today td.datecell{color:var(--today);background:#0a2630;box-shadow:inset 3px 0 0 var(--today);font-weight:600}
+  tr.today td.cell:hover{background:#0f3340}
+  .todaytag{margin-left:7px;font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:#04222b;background:var(--today);padding:1px 5px;border-radius:4px;vertical-align:middle}
+  td.cell{padding:0;height:38px;cursor:pointer;transition:background .12s;position:relative}
+  td.cell:hover{background:#15302680}
+  td.cell .val{font-family:var(--mono);font-weight:500}
+  td.cell .val.pos{color:var(--green)}
+  td.cell .val.neg{color:var(--red)}
+  td.cell .cnt{position:absolute;top:3px;right:4px;font-size:9px;font-family:var(--mono);color:var(--ink-faint)}
+  td.cell.empty:hover::after{content:'+';color:var(--ink-faint);font-family:var(--mono)}
+
+  /* week separator + totals */
+  tr.weektot td{background:#0c1f18;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  tr.weektot td.datecell{color:var(--ink-dim);font-size:11px;text-transform:uppercase;letter-spacing:.5px;background:#0c1f18}
+  tr.weektot .val{font-family:var(--mono);font-size:12px;font-weight:500}
+  tfoot td{background:var(--panel2);font-family:var(--mono);font-weight:500}
+  tfoot td.datecell{background:var(--panel2);color:var(--ink);text-transform:uppercase;letter-spacing:.5px}
+  /* righe totali per categoria: compatte e più piccole */
+  tfoot tr.cattot td{padding:5px 8px;border-top:1px solid var(--line-soft)}
+  tfoot tr.cattot td.datecell{font-size:10.5px;color:var(--ink-dim);font-weight:500}
+  tfoot tr.cattot .val{font-size:11.5px}
+  tfoot tr.sporthead td{border-top:1px solid var(--line)}
+  tfoot tr.sporthead td.datecell{color:var(--ink)}
+  tfoot tr.subcat td{padding-top:2px;padding-bottom:2px}
+  tfoot tr.subcat td.datecell{font-size:10px;color:var(--ink-faint);text-transform:none;letter-spacing:0;padding-left:16px}
+  tfoot tr.subcat .val{font-size:10.5px;opacity:.85}
+  /* totale generale: grande, in evidenza */
+  tfoot tr.grandtot td{padding:12px 8px;border-top:2px solid var(--line)}
+  tfoot tr.grandtot td.datecell{font-size:12px;color:var(--ink)}
+  tfoot tr.grandtot .val{font-size:14px}
+  .pos{color:var(--green)}.neg{color:var(--red)}.zero{color:var(--ink-faint)}
+  /* stati profilazione sulla riga Tot. mese */
+  .val.prof-green{color:var(--green)}
+  .val.prof-orange{color:var(--amber)}
+  .val.prof-red{color:var(--red)}
+  tfoot tr.grandtot td.profcell{position:relative}
+  tfoot tr.grandtot td.prof-green{box-shadow:inset 0 -3px 0 var(--green)}
+  tfoot tr.grandtot td.prof-orange{box-shadow:inset 0 -3px 0 var(--amber)}
+  tfoot tr.grandtot td.prof-red{box-shadow:inset 0 -3px 0 var(--red)}
+
+  /* summary cards */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:15px}
+  .card .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-dim);margin-bottom:8px}
+  .card .num{font-family:var(--mono);font-size:24px;font-weight:500}
+  .card .sub{font-size:11px;color:var(--ink-faint);margin-top:4px;font-family:var(--mono)}
+
+  /* modal */
+  .overlay{position:fixed;inset:0;background:#020806cc;backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .overlay.on{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;width:100%;max-width:440px;max-height:88vh;overflow:auto}
+  .modal .mh{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  .modal .mh h3{font-size:16px;font-weight:600}
+  .modal .mh .sub{font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin-top:2px}
+  .modal .close{background:none;border:none;color:var(--ink-dim);font-size:22px;cursor:pointer;line-height:1}
+  .modal .close:hover{color:var(--red)}
+  .mbody{padding:16px 18px}
+  .mv{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .mv .type{font-family:var(--mono);font-size:11px;color:var(--ink-dim);width:64px}
+  .mv .amt{font-family:var(--mono);font-weight:500;flex:1}
+  .mv .note{color:var(--ink-dim);font-size:12px;flex:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mv .del{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:15px}
+  .mv .del:hover{color:var(--red)}
+  .mvlist{border:1px solid var(--line-soft);border-radius:9px;padding:10px;margin-bottom:14px;min-height:40px;background:var(--bg)}
+  .mvlist .empty{color:var(--ink-faint);font-size:12px;text-align:center;padding:8px;font-family:var(--mono)}
+  .addrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+  .addrow.full{grid-template-columns:1fr}
+  input,select{background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:9px 11px;border-radius:8px;font-family:var(--mono);font-size:13px;width:100%}
+  input:focus,select:focus{outline:none;border-color:var(--green)}
+  input::placeholder{color:var(--ink-faint)}
+  label.fld{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-dim);margin-bottom:5px;margin-top:2px}
+  .hint{font-size:12px;color:var(--ink-faint);line-height:1.45;margin:2px 0 10px;font-family:var(--sans)}
+  .daytot{display:flex;justify-content:space-between;align-items:center;padding:12px 0 4px;border-top:1px solid var(--line);margin-top:12px;font-family:var(--mono)}
+  .daytot .n{font-size:18px;font-weight:500}
+  footer.foot{text-align:center;color:var(--ink-faint);font-size:11px;font-family:var(--mono);margin-top:24px}
+  .empty-state{text-align:center;padding:50px 20px;color:var(--ink-dim)}
+  .empty-state b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1><span class="dot"></span>Profiling Tracker</h1>
+      <div class="sheetctrl">
+        <button id="sPrev" title="Foglio precedente">‹</button>
+        <span class="sname" id="sheetLbl">Io</span>
+        <button id="sNext" title="Foglio successivo">›</button>
+        <button id="settingsBtn" class="gear" title="Impostazioni: fogli e bookmaker">⚙</button>
+      </div>
+    </div>
+    <div class="yearctrl">
+      <button id="yPrev">‹</button>
+      <span class="yr" id="yearLbl">2026</span>
+      <button id="yNext">›</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="months" id="months"></div>
+    <div class="proflegend">
+      <span class="pl"><i class="sw green"></i>profilato</span>
+      <span class="pl"><i class="sw orange"></i>parziale</span>
+      <span class="pl"><i class="sw red"></i>non profilato</span>
+    </div>
+  </div>
+
+  <div class="alerts" id="alerts"></div>
+
+  <div class="scrollbar-top" id="scrollTop"><div id="scrollTopInner"></div></div>
+  <div class="tablewrap" id="tablewrap">
+    <table id="grid"></table>
+  </div>
+
+</div>
+
+<!-- Day modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="mh">
+      <div>
+        <h3 id="mTitle">Giorno</h3>
+        <div class="sub" id="mSub"></div>
+      </div>
+      <button class="close" id="mClose">×</button>
+    </div>
+    <div class="mbody">
+      <div class="mvlist" id="mvList"></div>
+      <label class="fld">Aggiungi movimento</label>
+      <div class="addrow">
+        <select id="inType">
+          <option value="sport">Sport</option>
+          <option value="casino">Casinò</option>
+        </select>
+        <input type="number" id="inAmt" placeholder="€ importo" step="0.01" min="0">
+      </div>
+      <div class="addrow full">
+        <input type="text" id="inNote" placeholder="nota (opz.) — es. free bet, cashout…">
+      </div>
+      <button class="btn" id="addMvBtn" style="width:100%">Aggiungi movimento</button>
+      <div class="daytot">
+        <span>Totale giorno</span>
+        <span class="n" id="dayTotal">€0.00</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings / sheets modal -->
+<div class="overlay" id="setOverlay">
+  <div class="modal">
+    <div class="mh">
+      <div>
+        <h3>Impostazioni</h3>
+        <div class="sub">fogli e bookmaker</div>
+      </div>
+      <button class="close" id="setClose">×</button>
+    </div>
+    <div class="mbody">
+      <label class="fld">Fogli — ogni foglio è un tracker separato</label>
+      <div class="mvlist" id="sheetList"></div>
+      <div class="addrow full">
+        <input type="text" id="newSheetName" placeholder="nome nuovo foglio — es. Amico 1">
+      </div>
+      <button class="btn" id="addSheetBtn" style="width:100%">+ Aggiungi foglio</button>
+
+      <label class="fld" style="margin-top:18px">Bookmaker — condivisi da tutti i fogli</label>
+      <div class="mvlist" id="bmList"></div>
+      <div class="addrow full">
+        <input type="text" id="newBmName" placeholder="nome nuovo bookmaker — es. Betfair">
+      </div>
+      <button class="btn" id="addBmBtn" style="width:100%">+ Aggiungi bookmaker</button>
+
+      <label class="fld" style="margin-top:18px">Alert inattività — soglie condivise da tutti i fogli</label>
+      <div class="addrow">
+        <div>
+          <label class="fld" style="color:var(--amber)">⚠️ Avviso (giorni)</label>
+          <input type="number" id="warnInput" min="1" step="1">
+        </div>
+        <div>
+          <label class="fld" style="color:var(--red)">⛔ Allarme (giorni)</label>
+          <input type="number" id="alarmInput" min="1" step="1">
+        </div>
+      </div>
+
+      <label class="fld" style="margin-top:18px">Backup — per spostare o trasferire i dati</label>
+      <p class="hint">I dati vivono nel browser di questo dispositivo, legati alla posizione del file. Se sposti il file o cambi dispositivo, esporta prima un backup e reimportalo dopo.</p>
+      <div class="addrow">
+        <button class="btn ghost" id="exportBtn">⬇ Esporta backup</button>
+        <button class="btn ghost" id="importBtn">⬆ Importa backup</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+    </div>
+  </div>
+</div>
+
+<script>
+const MONTHS=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+const MONTHS_FULL=['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+const DOW=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+const SIGN={sport:1,casino:1,multiple:1,arbitraggio:1}; // multiple/arbitraggio: solo per leggere dati vecchi
+const TYPELBL={sport:'Sport',casino:'Casinò',multiple:'Sport',arbitraggio:'Sport'};
+
+/* Struttura multi-foglio: ogni foglio è un tracker indipendente
+   con i propri bookmaker e dati. Le soglie alert sono globali (in app). */
+function newSheet(name,bookmakers){
+  return {
+    name:name,
+    bookmakers:bookmakers||['Bet365','Sisal','Snai'],
+    data:{} // key `Y-M-D::bm` -> [{type,amt,note}]
+  };
+}
+
+let app={
+  year:new Date().getFullYear(),
+  current:0,            // indice foglio attivo
+  warnDays:7,           // soglia avviso (giallo) — globale, tutti i fogli
+  alarmDays:14,         // soglia allarme (rosso) — globale, tutti i fogli
+  minReq:{},            // soglie minime profilazione per bookmaker: {nome:{sport,casino}}
+  sheets:[newSheet('Io')]
+};
+let view={month:new Date().getMonth()};
+let modalKey=null;
+// data di "oggi": {y,m,d}. Inizializzata dall'orologio locale, poi confermata da internet se disponibile.
+let todayDate=(()=>{const n=new Date();return{y:n.getFullYear(),m:n.getMonth(),d:n.getDate()};})();
+
+// scorciatoia al foglio attivo
+function sheet(){return app.sheets[app.current];}
+
+/* ---- persistence ----
+   localStorage = archivio primario: scrive sul dispositivo, funziona OFFLINE
+   e anche aprendo il file HTML in locale. window.storage (se presente e online)
+   viene usato solo come copia di sincronizzazione aggiuntiva. */
+const LS_KEY='bookmakerTracker.v1';
+let saveTimer=null;
+
+function normalizeSheet(s){
+  // rimuovo eventuali soglie residue per-foglio (ora sono globali in app)
+  delete s.idleDays;delete s.warnDays;delete s.alarmDays;
+  // migrazione tipi: multiple e arbitraggio confluiscono in 'sport'
+  if(s.data){
+    for(const k in s.data){
+      const arr=s.data[k];if(!Array.isArray(arr))continue;
+      arr.forEach(x=>{if(x.type==='multiple'||x.type==='arbitraggio')x.type='sport';});
+    }
+  }
+  return s;
+}
+function adopt(obj){
+  if(!obj)return;
+  if(obj.sheets&&Array.isArray(obj.sheets)){
+    // nuovo formato multi-foglio
+    // se le soglie globali mancano, le recupero dal primo foglio che le aveva
+    if(obj.warnDays==null){
+      const src=obj.sheets.find(s=>s.warnDays!=null||s.idleDays!=null);
+      if(src)obj.warnDays=(src.warnDays!=null?src.warnDays:src.idleDays);
+    }
+    if(obj.alarmDays==null){
+      const src=obj.sheets.find(s=>s.alarmDays!=null||s.idleDays!=null);
+      if(src)obj.alarmDays=(src.alarmDays!=null?src.alarmDays:src.idleDays*2);
+    }
+    app={...app,...obj};
+    app.sheets.forEach(normalizeSheet);
+    if(!app.minReq||typeof app.minReq!=='object')app.minReq={};
+    // migrazione: rimuovo il vecchio campo 'weeks' (sostituito da 'parts')
+    Object.keys(app.minReq).forEach(bm=>{if(app.minReq[bm]&&app.minReq[bm].weeks!=null)delete app.minReq[bm].weeks;});
+    if(app.warnDays==null)app.warnDays=7;
+    if(app.alarmDays==null)app.alarmDays=14;
+    if(app.alarmDays<app.warnDays)app.alarmDays=app.warnDays;
+    if(app.current>=app.sheets.length)app.current=0;
+  }else if(obj.data||obj.bookmakers){
+    // vecchio formato a foglio singolo -> migro in un foglio "Io"
+    const s=newSheet('Io',obj.bookmakers);
+    s.data=obj.data||{};
+    app.sheets=[s];app.current=0;
+    if(obj.idleDays){app.warnDays=obj.idleDays;app.alarmDays=obj.idleDays*2;}
+    if(obj.year)app.year=obj.year;
+  }
+}
+
+async function load(){
+  let loaded=false;
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(raw){adopt(JSON.parse(raw));loaded=true;}
+  }catch(e){}
+  if(!loaded&&typeof window!=='undefined'&&window.storage){
+    try{
+      const r=await window.storage.get('tracker');
+      if(r&&r.value){adopt(JSON.parse(r.value));persistLocal();}
+    }catch(e){}
+  }
+}
+
+function persistLocal(){
+  try{localStorage.setItem(LS_KEY,JSON.stringify(app));return true;}
+  catch(e){return false;}
+}
+
+function save(){
+  persistLocal();
+  if(typeof window!=='undefined'&&window.storage){
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(()=>{
+      try{Promise.resolve(window.storage.set('tracker',JSON.stringify(app))).catch(()=>{});}catch(e){}
+    },400);
+  }
+}
+
+/* ---- backup: esporta / importa ---- */
+function exportBackup(){
+  const payload={_type:'bookmaker-tracker-backup',_v:1,exportedAt:new Date().toISOString(),app:app};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const d=new Date();
+  const stamp=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  a.href=url;a.download=`backup-tracker-${stamp}.json`;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},100);
+}
+function importBackup(file){
+  const reader=new FileReader();
+  reader.onload=()=>{
+    let obj;
+    try{obj=JSON.parse(reader.result);}catch(e){alert('File non valido: non è un backup leggibile.');return;}
+    // accetto sia il wrapper {_type,app} sia direttamente l'oggetto app
+    const incoming=(obj&&obj.app)?obj.app:obj;
+    if(!incoming||!Array.isArray(incoming.sheets)){alert('File non valido: non contiene dati del tracker.');return;}
+    const n=incoming.sheets.length;
+    if(!confirm(`Importare questo backup? Sostituirà TUTTI i dati attuali (${app.sheets.length} fogli) con quelli del file (${n} fogli). Azione irreversibile — esporta prima i dati attuali se vuoi conservarli.`))return;
+    // reset e adozione pulita
+    app={year:new Date().getFullYear(),current:0,warnDays:7,alarmDays:14,minReq:{},sheets:[newSheet('Io')]};
+    adopt(incoming);
+    save();
+    document.getElementById('setOverlay').classList.remove('on');
+    renderAll();
+    alert('Backup importato correttamente.');
+  };
+  reader.onerror=()=>alert('Impossibile leggere il file.');
+  reader.readAsText(file);
+}
+
+/* ---- helpers ---- */
+const keyOf=(y,m,d,bm)=>`${y}-${m}-${d}::${bm}`;
+const eur=n=>(n<0?'−':'')+'€'+Math.abs(n).toFixed(2);
+function cellTotal(y,m,d,bm){
+  const a=sheet().data[keyOf(y,m,d,bm)]||[];
+  return a.reduce((s,x)=>s+SIGN[x.type]*(+x.amt||0),0);
+}
+function cellCount(y,m,d,bm){return (sheet().data[keyOf(y,m,d,bm)]||[]).length;}
+function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
+// numero della settimana ISO 8601 dell'anno per una data
+function isoWeek(dt){
+  const d=new Date(Date.UTC(dt.getFullYear(),dt.getMonth(),dt.getDate()));
+  const day=(d.getUTCDay()+6)%7;      // lun=0 ... dom=6
+  d.setUTCDate(d.getUTCDate()-day+3); // giovedì della settimana ISO
+  const firstThu=new Date(Date.UTC(d.getUTCFullYear(),0,4));
+  const firstDay=(firstThu.getUTCDay()+6)%7;
+  firstThu.setUTCDate(firstThu.getUTCDate()-firstDay+3);
+  return 1+Math.round((d-firstThu)/(7*86400000));
+}
+function valClass(n){return n>0.0001?'pos':n<-0.0001?'neg':'zero';}
+// totali mensili di un bookmaker suddivisi per tipo
+function monthTotalsByType(y,m,bm){
+  const nd=daysInMonth(y,m);
+  const out={sport:0,casino:0};
+  for(let d=1;d<=nd;d++){
+    const a=sheet().data[keyOf(y,m,d,bm)]||[];
+    a.forEach(x=>{
+      const t=(x.type==='multiple'||x.type==='arbitraggio')?'sport':x.type;
+      if(out[t]!=null)out[t]+=SIGN[x.type]*(+x.amt||0);
+    });
+  }
+  return out;
+}
+// --- Profilazione a frazioni del mese ---
+// parts: 4 = quarto, 2 = metà, 1 = mese intero (default 1)
+// I giorni del mese si dividono equamente; il resto è distribuito in modo alternato
+// (extra prima ai blocchi in posizione pari 1°,3°,… poi ai dispari 2°,4°,…).
+function monthBlockSizes(days,parts){
+  const base=Math.floor(days/parts), rem=days%parts;
+  const sizes=new Array(parts).fill(base);
+  const order=[];
+  for(let i=0;i<parts;i+=2)order.push(i);
+  for(let i=1;i<parts;i+=2)order.push(i);
+  for(let i=0;i<rem;i++)sizes[order[i]]++;
+  return sizes;
+}
+// Restituisce {from,to} del blocco di profilazione corrente per un bookmaker.
+// Ancorato SEMPRE al mese corrente reale (gli alert riguardano "adesso").
+function currentBlock(bm){
+  const parts=Math.max(1,Math.min(4,(app.minReq&&app.minReq[bm]&&+app.minReq[bm].parts)||1));
+  const now=new Date();now.setHours(0,0,0,0);
+  const y=now.getFullYear(), m=now.getMonth();
+  const nd=daysInMonth(y,m);
+  const sizes=monthBlockSizes(nd,parts);
+  // costruisco i blocchi come intervalli di giorni del mese
+  const blocks=[];
+  let dayStart=1;
+  sizes.forEach(sz=>{
+    const from=new Date(y,m,dayStart);from.setHours(0,0,0,0);
+    const to=new Date(y,m,dayStart+sz-1);to.setHours(0,0,0,0);
+    blocks.push({from,to});
+    dayStart+=sz;
+  });
+  // scelgo il blocco che contiene oggi; se oggi è fuori dal mese, l'ultimo
+  const today=now;
+  let blk=blocks.find(b=>today>=b.from&&today<=b.to);
+  if(!blk)blk=blocks[blocks.length-1];
+  return blk;
+}
+// totali Multiple/Casinò dentro il blocco corrente del bookmaker
+function blockTotals(bm){
+  const blk=currentBlock(bm);
+  let sport=0,casino=0; // 'sport' qui = multiple
+  const d=sheet().data;
+  for(const k in d){
+    if(!k.endsWith('::'+bm))continue;
+    const[dpart]=k.split('::');const[yy,mm,dd]=dpart.split('-').map(Number);
+    const dt=new Date(yy,mm,dd);dt.setHours(0,0,0,0);
+    if(dt<blk.from||dt>blk.to)continue;
+    (d[k]||[]).forEach(x=>{
+      const v=SIGN[x.type]*(+x.amt||0);
+      if(x.type==='casino')casino+=v; else if(x.type==='sport'||x.type==='multiple'||x.type==='arbitraggio')sport+=v;
+    });
+  }
+  return {sport,casino,from:blk.from,to:blk.to};
+}
+// compat: profilingStatus/alert usano i totali del blocco corrente
+function windowTotals(bm){return blockTotals(bm);}
+// helper: anno corrente dello stato app
+function state_year(){return app.year;}
+// stato profilazione: 'green' | 'orange' | 'red' | null (se nessuna categoria attiva con soglia)
+function profilingStatus(bm){
+  const req=(app.minReq&&app.minReq[bm])||{};
+  // una categoria conta solo se NON disattivata e con soglia > 0
+  const useSport=!req.offSport && (+req.sport||0)>0;
+  const useCasino=!req.offCasino && (+req.casino||0)>0;
+  if(!useSport && !useCasino)return null; // niente da valutare -> nessun colore forzato
+  const w=blockTotals(bm);
+  const checks=[];
+  if(useSport)checks.push(w.sport>=(+req.sport));
+  if(useCasino)checks.push(w.casino>=(+req.casino));
+  const passed=checks.filter(Boolean).length;
+  if(passed===checks.length)return 'green';
+  if(passed===0)return 'red';
+  return 'orange';
+}
+
+/* ---- render toolbar ---- */
+function renderMonths(){
+  const c=document.getElementById('months');c.innerHTML='';
+  const now=new Date();
+  const curMonth=now.getMonth(), curYear=now.getFullYear();
+  MONTHS.forEach((m,i)=>{
+    const b=document.createElement('button');
+    const isCurrent=(i===curMonth && app.year===curYear);
+    b.className='mtab'+(i===view.month?' on':'')+(isCurrent?' current':'');
+    b.textContent=m;
+    b.onclick=()=>{view.month=i;renderAll();};
+    c.appendChild(b);
+  });
+}
+
+/* ---- render grid ---- */
+function renderGrid(){
+  const y=app.year,m=view.month,nd=daysInMonth(y,m);
+  const t=document.getElementById('grid');
+  const bms=sheet().bookmakers;
+  let h='<thead><tr><th class="datecell" style="position:sticky;left:0;text-align:left;padding-left:10px">'+MONTHS_FULL[m]+'</th>';
+  bms.forEach((bm,bi)=>{
+    const req=(app.minReq&&app.minReq[bm])||{};
+    const off=[];
+    if(req.offSport)off.push('NO Sport');
+    if(req.offCasino)off.push('NO Casinò');
+    const tag=off.length?`<div class="bmoff">${off.join(' · ')}</div>`:'';
+    h+=`<th class="bm"><div class="bmname">${escapeHtml(bm)}</div>${tag}</th>`;
+  });
+  h+='</tr></thead><tbody>';
+
+  let monthTotals=new Array(bms.length).fill(0);
+  let weekTotals=new Array(bms.length).fill(0);
+  let weekHasData=false;
+
+  for(let d=1;d<=nd;d++){
+    const dt=new Date(y,m,d);const dow=dt.getDay();
+    const weekend=(dow===0||dow===6);
+    const isToday=(y===todayDate.y&&m===todayDate.m&&d===todayDate.d);
+    h+=`<tr class="${weekend?'weekend':''}${isToday?' today':''}">`;
+    h+=`<td class="datecell">${String(d).padStart(2,'0')}/${String(m+1).padStart(2,'0')}<span class="dow">${DOW[dow]}</span>${isToday?'<span class="todaytag">oggi</span>':''}</td>`;
+    bms.forEach((bm,bi)=>{
+      const tot=cellTotal(y,m,d,bm);const cnt=cellCount(y,m,d,bm);
+      monthTotals[bi]+=tot;weekTotals[bi]+=tot;if(cnt)weekHasData=true;
+      const inner=cnt?`<span class="val ${valClass(tot)}">${eur(tot)}</span>${cnt>1?`<span class="cnt">${cnt}</span>`:''}`:'';
+      h+=`<td class="cell ${cnt?'':'empty'}" data-d="${d}" data-bm="${bi}">${inner}</td>`;
+    });
+    h+='</tr>';
+    // end of week (Sunday) or last day -> week total row
+    if(dow===0||d===nd){
+      const wk=isoWeek(new Date(y,m,d));
+      h+=`<tr class="weektot"><td class="datecell">Settimana ${wk}</td>`;
+      bms.forEach((bm,bi)=>{
+        h+=`<td><span class="val ${valClass(weekTotals[bi])}">${weekHasData||weekTotals[bi]!==0?eur(weekTotals[bi]):'—'}</span></td>`;
+      });
+      h+='</tr>';
+      weekTotals=new Array(bms.length).fill(0);weekHasData=false;
+    }
+  }
+  h+='</tbody><tfoot>';
+  // pre-calcolo i totali per categoria di ogni bookmaker
+  const byType=bms.map((bm)=>monthTotalsByType(y,m,bm));
+  const mLbl=MONTHS[m].toUpperCase();
+  // riga: TOT. CASINÒ
+  h+=`<tr class="cattot"><td class="datecell">Tot. Casinò ${mLbl}</td>`;
+  byType.forEach(tt=>{h+=`<td><span class="val ${valClass(tt.casino)}">${eur(tt.casino)}</span></td>`;});
+  h+='</tr>';
+  // riga: TOT. SPORT
+  h+=`<tr class="cattot sporthead"><td class="datecell">Tot. Sport ${mLbl}</td>`;
+  byType.forEach(tt=>{h+=`<td><span class="val ${valClass(tt.sport)}">${eur(tt.sport)}</span></td>`;});
+  h+='</tr>';
+  // riga totale generale — colore secondo profilazione (verde/arancione/rosso)
+  h+='<tr class="grandtot"><td class="datecell">Tot. '+MONTHS[m]+'</td>';
+  bms.forEach((bm,bi)=>{
+    const st=profilingStatus(bm); // null | green | orange | red
+    const cls=st?('prof-'+st):valClass(monthTotals[bi]);
+    const tip=st?` title="Profilazione frazione di mese corrente"`:'';
+    h+=`<td${st?' class="profcell prof-'+st+'"':''}><span class="val ${cls}"${tip}>${eur(monthTotals[bi])}</span></td>`;
+  });
+  h+='</tr></tfoot>';
+  t.innerHTML=h;
+
+  t.querySelectorAll('td.cell').forEach(td=>{
+    td.onclick=()=>openDay(+td.dataset.d,+td.dataset.bm);
+  });
+  syncScrollbar();
+}
+
+/* ---- barra di scorrimento superiore sincronizzata ---- */
+function syncScrollbar(){
+  const wrap=document.getElementById('tablewrap');
+  const top=document.getElementById('scrollTop');
+  const inner=document.getElementById('scrollTopInner');
+  const grid=document.getElementById('grid');
+  // la barra sopra ha la stessa larghezza scrollabile della tabella
+  inner.style.width=grid.scrollWidth+'px';
+  // mostra la barra solo se c'è davvero da scorrere
+  top.style.display=(grid.scrollWidth>wrap.clientWidth)?'block':'none';
+}
+let _scrollLock=false;
+function bindScrollSync(){
+  const wrap=document.getElementById('tablewrap');
+  const top=document.getElementById('scrollTop');
+  top.addEventListener('scroll',()=>{if(_scrollLock)return;_scrollLock=true;wrap.scrollLeft=top.scrollLeft;_scrollLock=false;});
+  wrap.addEventListener('scroll',()=>{if(_scrollLock)return;_scrollLock=true;top.scrollLeft=wrap.scrollLeft;_scrollLock=false;});
+  window.addEventListener('resize',syncScrollbar);
+}
+
+/* ---- alerts (idle timer) ---- */
+function renderAlerts(){
+  const box=document.getElementById('alerts');box.innerHTML='';
+  const today=new Date();today.setHours(0,0,0,0);
+  const warn=app.warnDays, alarm=app.alarmDays;
+  sheet().bookmakers.forEach(bm=>{
+    let last=null;
+    for(const k in sheet().data){
+      if(!k.endsWith('::'+bm))continue;
+      if(!(sheet().data[k]||[]).length)continue;
+      const[dpart]=k.split('::');const[yy,mm,dd]=dpart.split('-').map(Number);
+      const dt=new Date(yy,mm,dd);
+      if(!last||dt>last)last=dt;
+    }
+    const diff=last?Math.floor((today-last)/86400000):null;
+    const timeAlert=(diff!=null&&diff>=warn);
+
+    // --- profilazione: quanto manca nel blocco corrente ---
+    const req=(app.minReq&&app.minReq[bm])||{};
+    const useMult=!req.offSport && (+req.sport||0)>0;
+    const useCas=!req.offCasino && (+req.casino||0)>0;
+    let profParts=null, profMissing=false, blockTo=null, daysLeft=null;
+    if(useMult||useCas){
+      const w=blockTotals(bm);
+      blockTo=w.to;
+      daysLeft=Math.round((w.to-today)/86400000); // giorni rimanenti alla scadenza (incluso oggi=0)
+      const parts=[];
+      if(useMult){
+        const miss=(+req.sport)-w.sport;
+        if(miss>0)profMissing=true;
+        parts.push(miss>0
+          ?`<span class="miss">Sport: mancano <b>${eur(miss)}</b></span>`
+          :`<span class="ok">Sport ✓ (${eur(w.sport)}/${eur(+req.sport)})</span>`);
+      }
+      if(useCas){
+        const miss=(+req.casino)-w.casino;
+        if(miss>0)profMissing=true;
+        parts.push(miss>0
+          ?`<span class="miss">Casinò: mancano <b>${eur(miss)}</b></span>`
+          :`<span class="ok">Casinò ✓ (${eur(w.casino)}/${eur(+req.casino)})</span>`);
+      }
+      profParts=parts;
+    }
+
+    // Mostro la riga se: c'è allarme tempo OPPURE manca qualcosa da profilare
+    if(!timeAlert && !profMissing)return;
+
+    const danger=(diff!=null&&diff>=alarm);
+    const div=document.createElement('div');
+    // colore riga: rosso se allarme tempo grave o manca profilazione senza tempo-alert lo tengo warn
+    div.className='alert '+(danger?'danger':'warn');
+    // testo scadenza blocco (se profilazione attiva)
+    let scadTxt='';
+    if(blockTo){
+      const dl=daysLeft;
+      const quando=dl<=0?'oggi':(dl===1?'domani':`tra ${dl} giorni`);
+      scadTxt=`scade ${blockTo.toLocaleDateString('it-IT')} (${quando})`;
+    }
+    let html='';
+    if(timeAlert){
+      html+=`<div class="alertmain"><span>${danger?'⛔':'⚠️'}</span><span><b>${escapeHtml(bm)}</b> nessun movimento da <b>${diff}</b> giorni</span><span class="pill">ultimo: ${last.toLocaleDateString('it-IT')}</span></div>`;
+    }else{
+      // nessun allarme tempo, ma manca profilazione: intestazione dedicata con scadenza
+      html+=`<div class="alertmain"><span>🎯</span><span><b>${escapeHtml(bm)}</b> profilazione blocco corrente incompleta</span><span class="pill">${scadTxt||(last?'ultimo: '+last.toLocaleDateString('it-IT'):'nessun movimento')}</span></div>`;
+    }
+    if(profParts&&profParts.length){
+      const scadPart=scadTxt?`<span class="deadline">⏳ ${scadTxt}</span>`:'';
+      html+=`<div class="alertsub">${profParts.join('<span class="sep">·</span>')}${scadPart?'<span class="sep">·</span>'+scadPart:''}</div>`;
+    }
+    div.innerHTML=html;
+    box.appendChild(div);
+  });
+  if(!box.children.length){
+    box.innerHTML=`<div class="alert warn" style="background:#0d2018;border-color:#1e3a30;color:var(--ink-dim)"><div class="alertmain"><span>✓</span><span>Tutto a posto: nessuna inattività oltre soglia e profilazioni complete</span></div></div>`;
+  }
+}
+
+/* ---- day modal ---- */
+function openDay(d,bi){
+  const bm=sheet().bookmakers[bi];
+  modalKey={d,bi,bm};
+  document.getElementById('mTitle').textContent=escapeText(bm);
+  document.getElementById('mSub').textContent=`${String(d).padStart(2,'0')} ${MONTHS_FULL[view.month]} ${app.year}`;
+  document.getElementById('inAmt').value='';
+  document.getElementById('inNote').value='';
+  renderModal();
+  document.getElementById('overlay').classList.add('on');
+  document.getElementById('inAmt').focus();
+}
+function renderModal(){
+  const{d,bm}=modalKey;
+  const k=keyOf(app.year,view.month,d,bm);
+  const arr=sheet().data[k]||[];
+  const list=document.getElementById('mvList');
+  if(!arr.length){list.innerHTML='<div class="empty">nessun movimento — aggiungine uno sotto</div>';}
+  else{
+    list.innerHTML=arr.map((x,i)=>{
+      const v=SIGN[x.type]*(+x.amt||0);
+      return `<div class="mv"><span class="type">${TYPELBL[x.type]}</span><span class="amt ${valClass(v)}">${eur(v)}</span><span class="note">${escapeHtml(x.note||'')}</span><button class="del" data-i="${i}">×</button></div>`;
+    }).join('');
+    list.querySelectorAll('.del').forEach(b=>b.onclick=()=>{arr.splice(+b.dataset.i,1);if(!arr.length)delete sheet().data[k];save();renderModal();renderAll();});
+  }
+  const tot=arr.reduce((s,x)=>s+SIGN[x.type]*(+x.amt||0),0);
+  const dt=document.getElementById('dayTotal');
+  dt.textContent=eur(tot);dt.className='n '+valClass(tot);
+}
+function addMovement(){
+  const type=document.getElementById('inType').value;
+  const amt=parseFloat(document.getElementById('inAmt').value);
+  const note=document.getElementById('inNote').value.trim();
+  if(isNaN(amt)||amt<=0){document.getElementById('inAmt').focus();return;}
+  const{d,bm}=modalKey;const k=keyOf(app.year,view.month,d,bm);
+  if(!sheet().data[k])sheet().data[k]=[];
+  sheet().data[k].push({type,amt:Math.abs(amt),note});
+  document.getElementById('inAmt').value='';
+  document.getElementById('inNote').value='';
+  document.getElementById('inAmt').focus();
+  save();renderModal();renderAll();
+}
+
+/* ---- bookmaker mgmt (globale: agisce su tutti i fogli) ---- */
+function addBm(){
+  const inp=document.getElementById('newBmName');
+  const n=(inp.value||'').trim();
+  if(!n){inp.focus();return;}
+  if(sheet().bookmakers.includes(n)){alert('Bookmaker già presente.');return;}
+  app.sheets.forEach(s=>{if(!s.bookmakers.includes(n))s.bookmakers.push(n);});
+  inp.value='';
+  save();renderBmList();renderAll();
+}
+function removeBm(name){
+  if(!confirm(`Rimuovere "${name}" da TUTTI i fogli? I movimenti già registrati resteranno salvati ma non visibili.`))return;
+  app.sheets.forEach(s=>{
+    const i=s.bookmakers.indexOf(name);
+    if(i>-1)s.bookmakers.splice(i,1);
+  });
+  save();renderBmList();renderAll();
+}
+function renameBm(oldName){
+  const nn=prompt('Nuovo nome del bookmaker:',oldName);
+  if(nn===null)return;
+  const neo=nn.trim();
+  if(!neo||neo===oldName)return;
+  if(sheet().bookmakers.includes(neo)){alert('Esiste già un bookmaker con questo nome.');return;}
+  app.sheets.forEach(s=>{
+    // rinomino nella lista bookmaker
+    const i=s.bookmakers.indexOf(oldName);
+    if(i>-1)s.bookmakers[i]=neo;
+    // migro le chiavi dati "Y-M-D::oldName" -> "Y-M-D::neo"
+    const suffixOld='::'+oldName;
+    Object.keys(s.data).forEach(k=>{
+      if(k.endsWith(suffixOld)){
+        const nk=k.slice(0,-suffixOld.length)+'::'+neo;
+        // se per qualche motivo esiste già, unisco i movimenti
+        s.data[nk]=(s.data[nk]||[]).concat(s.data[k]);
+        delete s.data[k];
+      }
+    });
+  });
+  // migro la soglia di profilazione
+  if(app.minReq&&app.minReq[oldName]){app.minReq[neo]=app.minReq[oldName];delete app.minReq[oldName];}
+  save();renderBmList();renderAll();
+}
+function renderBmList(){
+  const box=document.getElementById('bmList');
+  const bms=sheet().bookmakers;
+  if(!bms.length){box.innerHTML='<div class="empty">nessun bookmaker — aggiungine uno sotto</div>';return;}
+  box.innerHTML=bms.map(bm=>{
+    const req=(app.minReq&&app.minReq[bm])||{};
+    const vs=(req.sport!=null?req.sport:'');
+    const vc=(req.casino!=null?req.casino:'');
+    const offS=!!req.offSport, offC=!!req.offCasino;
+    return `
+    <div class="bmitem">
+      <div class="sheetrow" style="border:none;padding:6px 4px 2px">
+        <span class="nm" data-renbm="${escapeHtml(bm)}">${escapeHtml(bm)}</span>
+        <button class="act" data-renbm2="${escapeHtml(bm)}">rinomina</button>
+        <button class="act del" data-rmbm="${escapeHtml(bm)}">rimuovi</button>
+      </div>
+      <div class="minreq">
+        <span class="mrl">profila per</span>
+        <select class="mrparts" data-bm="${escapeHtml(bm)}">
+          <option value="4"${(+req.parts||1)===4?' selected':''}>Quarto di mese</option>
+          <option value="2"${(+req.parts||1)===2?' selected':''}>Metà mese</option>
+          <option value="1"${(+req.parts||1)===1?' selected':''}>Mese intero</option>
+        </select>
+        <span class="mrl">— min. € per blocco:</span>
+        <label class="mrcat ${offS?'off':''}">
+          <input type="checkbox" class="mrtog" data-tog="offSport" data-bm="${escapeHtml(bm)}" ${offS?'':'checked'}>
+          Sport <input type="number" min="0" step="1" class="mrin" data-mr="sport" data-bm="${escapeHtml(bm)}" value="${vs}" placeholder="—" ${offS?'disabled':''}>
+        </label>
+        <label class="mrcat ${offC?'off':''}">
+          <input type="checkbox" class="mrtog" data-tog="offCasino" data-bm="${escapeHtml(bm)}" ${offC?'':'checked'}>
+          Casinò <input type="number" min="0" step="1" class="mrin" data-mr="casino" data-bm="${escapeHtml(bm)}" value="${vc}" placeholder="—" ${offC?'disabled':''}>
+        </label>
+      </div>
+    </div>`;}).join('');
+  box.querySelectorAll('[data-renbm]').forEach(b=>b.onclick=()=>renameBm(b.dataset.renbm));
+  box.querySelectorAll('[data-renbm2]').forEach(b=>b.onclick=()=>renameBm(b.dataset.renbm2));
+  box.querySelectorAll('[data-rmbm]').forEach(b=>b.onclick=()=>removeBm(b.dataset.rmbm));
+  box.querySelectorAll('.mrin').forEach(inp=>inp.onchange=()=>{
+    const bm=inp.dataset.bm, kind=inp.dataset.mr;
+    let v=parseFloat(inp.value);
+    if(!app.minReq[bm])app.minReq[bm]={};
+    if(isNaN(v)||v<0){delete app.minReq[bm][kind];inp.value='';}
+    else app.minReq[bm][kind]=v;
+    cleanupReq(bm);
+    save();renderAll();
+  });
+  box.querySelectorAll('.mrtog').forEach(chk=>chk.onchange=()=>{
+    const bm=chk.dataset.bm, flag=chk.dataset.tog;
+    if(!app.minReq[bm])app.minReq[bm]={};
+    // checkbox spuntata = categoria ATTIVA -> flag off = false
+    if(chk.checked)delete app.minReq[bm][flag];
+    else app.minReq[bm][flag]=true;
+    cleanupReq(bm);
+    save();renderBmList();renderAll();
+  });
+  box.querySelectorAll('.mrparts').forEach(sel=>sel.onchange=()=>{
+    const bm=sel.dataset.bm;
+    if(!app.minReq[bm])app.minReq[bm]={};
+    const p=parseInt(sel.value)||1;
+    if(p===1)delete app.minReq[bm].parts; else app.minReq[bm].parts=p;
+    cleanupReq(bm);
+    save();renderAll();
+  });
+}
+// rimuove la voce minReq del bookmaker se non contiene nulla di utile
+function cleanupReq(bm){
+  const r=app.minReq[bm];
+  if(!r)return;
+  if(r.sport==null&&r.casino==null&&!r.offSport&&!r.offCasino&&(r.parts==null||r.parts===1))delete app.minReq[bm];
+}
+
+/* ---- utils ---- */
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function escapeText(s){return String(s);}
+
+/* ---- sheets mgmt ---- */
+function switchSheet(delta){
+  const n=app.sheets.length;
+  app.current=(app.current+delta+n)%n;
+  view.month=new Date().getMonth();
+  save();renderAll();
+}
+function addSheet(){
+  const inp=document.getElementById('newSheetName');
+  const name=(inp.value||'').trim();
+  if(!name){inp.focus();return;}
+  app.sheets.push(newSheet(name,[...sheet().bookmakers]));
+  app.current=app.sheets.length-1;
+  inp.value='';
+  save();renderSheetList();renderAll();
+}
+function renameSheet(i){
+  const cur=app.sheets[i].name;
+  const name=prompt('Nuovo nome del foglio:',cur);
+  if(name===null)return;
+  const n=name.trim();if(!n)return;
+  app.sheets[i].name=n;
+  save();renderSheetList();renderAll();
+}
+function deleteSheet(i){
+  if(app.sheets.length<=1){alert('Deve restare almeno un foglio.');return;}
+  if(!confirm(`Eliminare il foglio "${app.sheets[i].name}" e tutti i suoi dati? Azione irreversibile.`))return;
+  app.sheets.splice(i,1);
+  if(app.current>=app.sheets.length)app.current=app.sheets.length-1;
+  save();renderSheetList();renderAll();
+}
+function renderSheetList(){
+  const box=document.getElementById('sheetList');
+  box.innerHTML=app.sheets.map((s,i)=>`
+    <div class="sheetrow ${i===app.current?'active':''}">
+      <span class="nm" data-go="${i}">${escapeHtml(s.name)}</span>
+      <button class="act" data-ren="${i}">rinomina</button>
+      <button class="act del" data-del="${i}">elimina</button>
+    </div>`).join('');
+  box.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{app.current=+b.dataset.go;view.month=new Date().getMonth();save();renderSheetList();renderAll();});
+  box.querySelectorAll('[data-ren]').forEach(b=>b.onclick=()=>renameSheet(+b.dataset.ren));
+  box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteSheet(+b.dataset.del));
+}
+function openSettings(){
+  renderSheetList();renderBmList();
+  document.getElementById('warnInput').value=app.warnDays;
+  document.getElementById('alarmInput').value=app.alarmDays;
+  document.getElementById('setOverlay').classList.add('on');
+}
+
+/* ---- master render ---- */
+function renderAll(){
+  document.getElementById('yearLbl').textContent=app.year;
+  document.getElementById('sheetLbl').textContent=sheet().name;
+  renderMonths();renderGrid();renderAlerts();
+}
+
+/* ---- events ---- */
+document.getElementById('yPrev').onclick=()=>{app.year--;save();renderAll();};
+document.getElementById('yNext').onclick=()=>{app.year++;save();renderAll();};
+document.getElementById('sPrev').onclick=()=>switchSheet(-1);
+document.getElementById('sNext').onclick=()=>switchSheet(1);
+document.getElementById('settingsBtn').onclick=openSettings;
+document.getElementById('setClose').onclick=()=>document.getElementById('setOverlay').classList.remove('on');
+document.getElementById('setOverlay').onclick=e=>{if(e.target.id==='setOverlay')document.getElementById('setOverlay').classList.remove('on');};
+document.getElementById('addSheetBtn').onclick=addSheet;
+document.getElementById('newSheetName').addEventListener('keydown',e=>{if(e.key==='Enter')addSheet();});
+document.getElementById('addBmBtn').onclick=addBm;
+document.getElementById('newBmName').addEventListener('keydown',e=>{if(e.key==='Enter')addBm();});
+document.getElementById('exportBtn').onclick=exportBackup;
+document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
+document.getElementById('importFile').addEventListener('change',e=>{
+  const f=e.target.files&&e.target.files[0];
+  if(f)importBackup(f);
+  e.target.value=''; // permette di reimportare lo stesso file
+});
+document.getElementById('addMvBtn').onclick=addMovement;
+document.getElementById('mClose').onclick=()=>document.getElementById('overlay').classList.remove('on');
+document.getElementById('overlay').onclick=e=>{if(e.target.id==='overlay')document.getElementById('overlay').classList.remove('on');};
+document.getElementById('inAmt').addEventListener('keydown',e=>{if(e.key==='Enter')addMovement();});
+document.getElementById('inNote').addEventListener('keydown',e=>{if(e.key==='Enter')addMovement();});
+document.getElementById('warnInput').addEventListener('change',e=>{
+  let v=parseInt(e.target.value);if(isNaN(v)||v<1)v=1;
+  app.warnDays=v;
+  if(app.alarmDays<v){app.alarmDays=v;document.getElementById('alarmInput').value=v;}
+  e.target.value=v;save();renderAll();renderBmList();
+});
+document.getElementById('alarmInput').addEventListener('change',e=>{
+  let v=parseInt(e.target.value);if(isNaN(v)||v<1)v=1;
+  if(v<app.warnDays)v=app.warnDays; // allarme non può precedere l'avviso
+  app.alarmDays=v;e.target.value=v;save();renderAll();renderBmList();
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.getElementById('overlay').classList.remove('on');document.getElementById('setOverlay').classList.remove('on');}});
+
+/* init */
+(async()=>{await load();bindScrollSync();renderAll();})();
+</script>
+</body>
+</html>
